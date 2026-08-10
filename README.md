@@ -30,7 +30,7 @@ Następnie:
 
 ```bash
 npm install
-cp .env.example .env   # uzupełnij DATABASE_URL / DIRECT_URL (i opcjonalnie ANTHROPIC_API_KEY)
+cp .env.example .env   # uzupełnij DATABASE_URL (i opcjonalnie ANTHROPIC_API_KEY)
 npm run dev
 ```
 
@@ -54,14 +54,14 @@ npm run seed
 
 1. **Dodaj bazę danych** — w panelu projektu na Vercel: `Storage` → `Create
    Database` → `Postgres` (lub połącz zewnętrzny Neon przez Vercel
-   Marketplace). Vercel wystawi kilka zmiennych środowiskowych
-   (`POSTGRES_PRISMA_URL`, `POSTGRES_URL_NON_POOLING` itp.).
+   Marketplace). Vercel wystawi kilka zmiennych środowiskowych.
 2. **Ustaw zmienne środowiskowe** projektu (`Settings` → `Environment
    Variables`):
-   - `DATABASE_URL` — wartość `POSTGRES_PRISMA_URL` (connection string przez
-     pgbouncer/pooler — używany w runtime przez funkcje serverless)
-   - `DIRECT_URL` — wartość `POSTGRES_URL_NON_POOLING` (połączenie
-     bezpośrednie — używane tylko przez `prisma db push` podczas builda)
+   - `DATABASE_URL` — connection string **bezpośredni, bez poolera**
+     (zwykle wartość `POSTGRES_URL_NON_POOLING`). Używamy jednego URL-a i do
+     builda (`prisma db push`), i do runtime — prościej, mniej podatne na
+     błędy konfiguracji niż osobny pooled/direct URL. Dla ruchu na poziomie
+     MVP jest to wystarczające.
    - `ANTHROPIC_API_KEY` — opcjonalnie, klucz do Claude API (bez niego
      działa fallback po słowach kluczowych)
 3. **Deploy** — Vercel wykryje Next.js automatycznie i użyje komendy
@@ -71,7 +71,8 @@ npm run seed
 
 Uwaga: `prisma db push` przy każdym buildzie jest OK dla MVP (brak
 formalnych migracji), ale przy realnych danych produkcyjnych warto docelowo
-przejść na `prisma migrate deploy`.
+przejść na `prisma migrate deploy` i osobny pooled connection string dla
+runtime (żeby nie wyczerpać limitu połączeń na Postgresie).
 
 ## Klucz Claude API (opcjonalny)
 

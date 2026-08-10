@@ -6,12 +6,11 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  // DATABASE_URL — połączenie "pooled" (przez pgbouncer), używane w runtime
-  // przez funkcje serverless. DIRECT_URL — połączenie bezpośrednie, używane
-  // tylko przez `prisma db push`/`migrate` (Prisma sam wybiera właściwe).
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  // Jeden connection string do wszystkiego (runtime + `prisma db push`).
+  // Prostsze i mniej podatne na błędy konfiguracji niż osobny pooled/direct
+  // URL — wystarczające dla ruchu na poziomie MVP.
+  url      = env("DATABASE_URL")
 }
 
 model Supplier {
