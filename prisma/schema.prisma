@@ -1,0 +1,87 @@
+// Buildsy — schemat bazy danych (SQLite, MVP)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Supplier {
+  id                      Int      @id @default(autoincrement())
+  name                    String
+  country                 String // kod kraju, np. "PL", "DE", "CZ"
+  region                  String // np. "Wielkopolska"
+  city                    String
+  avgDeliveryDaysLocal    Int      @map("avg_delivery_days_local")
+  avgDeliveryDaysNational Int      @map("avg_delivery_days_national")
+  reliabilityScore        Float?   @map("reliability_score")
+
+  offers Offer[]
+
+  @@map("suppliers")
+}
+
+model Material {
+  id       Int    @id @default(autoincrement())
+  name     String // np. "Beton towarowy C25/30"
+  category String // np. "beton", "stal", "cement", "płyty", "izolacje"
+  unit     String // np. "m3", "tona", "worek", "szt", "m2"
+  keywords String // słowa kluczowe / synonimy oddzielone przecinkami
+
+  offers  Offer[]
+  queries Query[]
+
+  @@map("materials")
+}
+
+model Offer {
+  id           Int      @id @default(autoincrement())
+  supplierId   Int      @map("supplier_id")
+  materialId   Int      @map("material_id")
+  pricePerUnit Float    @map("price_per_unit")
+  currency     String   @default("PLN")
+  inStock      Boolean  @default(true) @map("in_stock")
+  stockQty     Int?     @map("stock_qty")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  material Material @relation(fields: [materialId], references: [id])
+  orders   Order[]
+
+  @@index([materialId])
+  @@map("offers")
+}
+
+model Query {
+  id               Int       @id @default(autoincrement())
+  rawQuery         String    @map("raw_query")
+  parsedMaterialId Int?      @map("parsed_material_id")
+  parsedQuantity   Float?    @map("parsed_quantity")
+  parsedLocation   String?   @map("parsed_location")
+  parsedDeadline   String?   @map("parsed_deadline")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  material Material? @relation(fields: [parsedMaterialId], references: [id])
+  orders   Order[]
+
+  @@map("queries")
+}
+
+model Order {
+  id          Int      @id @default(autoincrement())
+  queryId     Int?     @map("query_id")
+  offerId     Int      @map("offer_id")
+  quantity    Float
+  totalPrice  Float    @map("total_price")
+  status      String   @default("confirmed") // "pending" | "confirmed"
+  orderNumber String   @unique @map("order_number") // np. "BLD-4F9A2C"
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  query Query? @relation(fields: [queryId], references: [id])
+  offer Offer  @relation(fields: [offerId], references: [id])
+
+  @@map("orders")
+}
