@@ -1,12 +1,17 @@
-// Buildsy — schemat bazy danych (SQLite, MVP)
+// Buildsy — schemat bazy danych (PostgreSQL — hostowane u dostawcy zgodnego
+// z Vercel, np. Vercel Postgres / Neon; działa też z lokalnym Postgresem).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // DATABASE_URL — połączenie "pooled" (przez pgbouncer), używane w runtime
+  // przez funkcje serverless. DIRECT_URL — połączenie bezpośrednie, używane
+  // tylko przez `prisma db push`/`migrate` (Prisma sam wybiera właściwe).
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Supplier {
