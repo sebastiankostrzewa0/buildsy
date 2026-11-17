@@ -1,0 +1,449 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Symulator BRKZ</title>
+<style>
+  /* Layout: dark "control room" — sticky status band, scrolling step log below,
+     flywheel loop diagram, then a sourced comparison table of global players. */
+  :root{
+    --bg:#0a0c0f; --surface:#14181d; --surface-2:#1b2027; --border:#2a3139;
+    --fg:#e9edf1; --fg-muted:#8c96a3; --accent:#39d6b0; --accent-fg:#06211b;
+    --predicted:#f0a93b; --predicted-bg:rgba(240,169,59,.12);
+    --live:#4fb0ff; --live-bg:rgba(79,176,255,.12);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light){
+    :root:not([data-theme="dark"]){
+      --bg:#f4f5f3; --surface:#ffffff; --surface-2:#eceeec; --border:#d8dcda;
+      --fg:#13171a; --fg-muted:#5b6670; --accent:#0e9e7c; --accent-fg:#ffffff;
+      --predicted:#b9690a; --predicted-bg:rgba(185,105,10,.1);
+      --live:#1668c4; --live-bg:rgba(22,104,196,.1);
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f4f5f3; --surface:#ffffff; --surface-2:#eceeec; --border:#d8dcda;
+    --fg:#13171a; --fg-muted:#5b6670; --accent:#0e9e7c; --accent-fg:#ffffff;
+    --predicted:#b9690a; --predicted-bg:rgba(185,105,10,.1);
+    --live:#1668c4; --live-bg:rgba(22,104,196,.1);
+    color-scheme: light;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
+    padding-left:max(16px, env(safe-area-inset-left,0px));
+    padding-right:max(16px, env(safe-area-inset-right,0px));
+  }
+  h1,h2,h3{font-family:'Space Grotesk',ui-sans-serif,sans-serif; text-wrap:balance; margin:0}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums}
+  a{color:var(--live)}
+  .wrap{max-width:860px; margin:0 auto}
+
+  header.top{padding:40px 0 28px; border-bottom:1px solid var(--border)}
+  .eyebrow{font-family:'IBM Plex Mono',monospace; font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); margin:0 0 10px}
+  h1{font-size:clamp(28px,6vw,42px); font-weight:600; letter-spacing:-0.01em}
+  .lede{color:var(--fg-muted); font-size:16px; max-width:62ch; margin-top:12px; line-height:1.55}
+
+  .callout{
+    margin-top:20px; padding:14px 16px; border:1px solid var(--border); border-left:3px solid var(--predicted);
+    background:var(--surface); border-radius:4px; font-size:13.5px; color:var(--fg-muted); line-height:1.5;
+  }
+  .callout b{color:var(--fg)}
+
+  section{padding:40px 0; border-bottom:1px solid var(--border)}
+  section:last-of-type{border-bottom:none}
+  .section-head{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:18px}
+  h2{font-size:clamp(20px,4vw,26px); font-weight:600}
+
+  /* --- simulator --- */
+  .rfq-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:18px 20px;
+  }
+  .rfq-row{display:flex; justify-content:space-between; gap:12px; font-size:14px; padding:6px 0; border-bottom:1px dashed var(--border)}
+  .rfq-row:last-child{border-bottom:none}
+  .rfq-row span:first-child{color:var(--fg-muted)}
+  .rfq-row span:last-child{font-family:'IBM Plex Mono',monospace}
+
+  .controls{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap}
+  button{
+    font-family:'Space Grotesk',sans-serif; font-weight:600; font-size:14px;
+    border-radius:6px; padding:11px 18px; cursor:pointer; border:1px solid transparent;
+  }
+  button:focus-visible{outline:2px solid var(--live); outline-offset:2px}
+  .btn-primary{background:var(--accent); color:var(--accent-fg)}
+  .btn-primary:disabled{opacity:.45; cursor:not-allowed}
+  .btn-ghost{background:transparent; border-color:var(--border); color:var(--fg)}
+
+  .steps{margin-top:22px; display:flex; flex-direction:column; gap:10px}
+  .step{
+    display:flex; gap:14px; padding:14px 16px; border:1px solid var(--border); border-radius:8px;
+    background:var(--surface); opacity:0; transform:translateY(6px); transition:opacity .35s ease, transform .35s ease;
+    min-width:0;
+  }
+  .step.show{opacity:1; transform:translateY(0)}
+  .step-num{
+    flex-shrink:0; width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; background:var(--surface-2); color:var(--fg-muted); border:1px solid var(--border);
+  }
+  .step.show .step-num{background:var(--accent); color:var(--accent-fg); border-color:var(--accent)}
+  .step-body{min-width:0; flex:1}
+  .step-title{font-weight:600; font-size:14.5px; margin-bottom:3px}
+  .step-detail{font-size:13.5px; color:var(--fg-muted); line-height:1.5}
+  .tag{display:inline-block; font-family:'IBM Plex Mono',monospace; font-size:11px; padding:2px 7px; border-radius:20px; margin-top:7px; margin-right:6px}
+  .tag-predicted{background:var(--predicted-bg); color:var(--predicted)}
+  .tag-live{background:var(--live-bg); color:var(--live)}
+
+  .quote-list{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .quote{display:flex; justify-content:space-between; gap:10px; font-size:13px; padding:7px 9px; background:var(--surface-2); border-radius:5px; border:1px solid var(--border)}
+  .quote.best{border-color:var(--accent)}
+  .quote .name{color:var(--fg)}
+  .quote .meta{font-family:'IBM Plex Mono',monospace; color:var(--fg-muted); white-space:nowrap}
+
+  .whatsapp{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .bubble{background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:8px 11px; font-size:13px; max-width:85%}
+
+  .status-line{margin-top:16px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; color:var(--fg-muted); min-height:18px}
+
+  /* --- flywheel --- */
+  .flywheel{display:flex; flex-direction:column; gap:20px; align-items:center}
+  .flywheel svg{width:100%; max-width:520px; height:auto}
+  .flywheel-node text{font-family:'IBM Plex Mono',monospace}
+  .flywheel-note{font-size:14.5px; color:var(--fg-muted); line-height:1.6; max-width:64ch}
+
+  /* --- table --- */
+  .table-scroll{overflow-x:auto; border:1px solid var(--border); border-radius:8px}
+  table{border-collapse:collapse; width:100%; min-width:720px; font-size:13.5px}
+  thead th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; text-transform:uppercase; letter-spacing:.04em;
+    font-size:11px; color:var(--fg-muted); padding:10px 12px; background:var(--surface-2); border-bottom:1px solid var(--border);
+  }
+  tbody td{padding:11px 12px; border-bottom:1px solid var(--border); vertical-align:top; color:var(--fg)}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--surface)}
+  .muted{color:var(--fg-muted)}
+
+  footer{padding:30px 0 50px; font-size:12.5px; color:var(--fg-muted); line-height:1.7}
+  footer a{color:var(--fg-muted); text-decoration-color:var(--border)}
+
+  @media (max-width:480px){
+    .rfq-row{flex-direction:column; gap:2px}
+    .quote{flex-direction:column; gap:2px}
+  }
+</style>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">// Jak działa agent zakupowy — na przykładzie BRKZ</p>
+    <h1>Symulator BRKZ</h1>
+    <p class="lede">BRKZ to platforma B2B z Rijadu, która automatyzuje zakup materiałów budowlanych dla wykonawców w Arabii Saudyjskiej — AI szacuje cenę, zanim jeszcze ktokolwiek odpowie na zapytanie. Poniżej: krok po kroku, jak to działa, i dlaczego to się kompounduje w przewagę.</p>
+    <div class="callout">
+      <b>To jest symulacja mechanizmu</b>, zrekonstruowana z publicznych doniesień o BRKZ (patrz źródła na dole), nie podgląd ich prawdziwego systemu. Liczby w kroku „RFQ" i ofertach dostawców są przykładowe.
+    </div>
+  </header>
+
+  <section id="sim">
+    <div class="section-head">
+      <h2>Przebieg jednej transakcji</h2>
+    </div>
+
+    <div class="rfq-card">
+      <div class="rfq-row"><span>Materiał</span><span>Beton towarowy C25/30</span></div>
+      <div class="rfq-row"><span>Ilość</span><span>120 m³</span></div>
+      <div class="rfq-row"><span>Region</span><span>Śląsk</span></div>
+      <div class="rfq-row"><span>Termin</span><span>za 10 dni</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-primary" id="run-btn">Uruchom symulację</button>
+      <button class="btn-ghost" id="reset-btn">Resetuj</button>
+    </div>
+
+    <div class="steps" id="steps"></div>
+    <p class="status-line" id="status-line"></p>
+  </section>
+
+  <section id="flywheel">
+    <div class="section-head"><h2>Dlaczego to robi różnicę</h2></div>
+    <p class="flywheel-note" style="margin-bottom:18px">
+      Samo wysyłanie zapytań do dostawców da się skopiować w kilka tygodni — i dokładnie to zabiło merXu. Przewaga BRKZ nie leży w mechanice RFQ, tylko w pętli poniżej: każda transakcja poprawia model cenowy, który z kolei przyciąga więcej kupujących i dostawców.
+    </p>
+    <div class="flywheel">
+      <svg viewBox="0 0 480 480" role="img" aria-label="Diagram pętli: więcej RFQ prowadzi do więcej danych, lepszej predykcji, większego zaufania i z powrotem do większej liczby RFQ">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--fg-muted)"></path>
+          </marker>
+        </defs>
+        <circle cx="240" cy="240" r="165" fill="none" stroke="var(--border)" stroke-width="1.5" stroke-dasharray="3 5"></circle>
+
+        <g class="flywheel-node" transform="translate(240,55)">
+          <circle r="46" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.6"></circle>
+          <text text-anchor="middle" y="-4" font-size="11" fill="var(--fg)">Więcej</text>
+          <text text-anchor="middle" y="10" font-size="11" fill="var(--fg)">RFQ</text>
+        </g>
+
+        <g class="flywheel-node" transform="translate(410,195)">
+          <circle r="46" fill="var(--surface)" stroke="var(--border)" stroke-width="1.6"></circle>
+          <text text-anchor="middle" y="-4" font-size="10.5" fill="var(--fg)">Dane</text>
+          <text text-anchor="middle" y="10" font-size="10.5" fill="var(--fg)">transakcji</text>
+        </g>
+
+        <g class="flywheel-node" transform="translate(355,375)">
+          <circle r="46" fill="var(--surface)" stroke="var(--border)" stroke-width="1.6"></circle>
+          <text text-anchor="middle" y="-10" font-size="10" fill="var(--fg)">Lepsza</text>
+          <text text-anchor="middle" y="4" font-size="10" fill="var(--fg)">predykcja</text>
+          <text text-anchor="middle" y="18" font-size="10" fill="var(--fg)">cen</text>
+        </g>
+
+        <g class="flywheel-node" transform="translate(125,375)">
+          <circle r="46" fill="var(--surface)" stroke="var(--border)" stroke-width="1.6"></circle>
+          <text text-anchor="middle" y="-4" font-size="10" fill="var(--fg)">Szybsze</text>
+          <text text-anchor="middle" y="10" font-size="10" fill="var(--fg)">oferty</text>
+        </g>
+
+        <g class="flywheel-node" transform="translate(70,195)">
+          <circle r="46" fill="var(--surface)" stroke="var(--border)" stroke-width="1.6"></circle>
+          <text text-anchor="middle" y="-10" font-size="10" fill="var(--fg)">Więcej</text>
+          <text text-anchor="middle" y="4" font-size="10" fill="var(--fg)">zaufania</text>
+          <text text-anchor="middle" y="18" font-size="10" fill="var(--fg)">i dostawców</text>
+        </g>
+
+        <path d="M 278 65 A 165 165 0 0 1 404 160" fill="none" stroke="var(--fg-muted)" stroke-width="1.4" marker-end="url(#arrow)"></path>
+        <path d="M 422 232 A 165 165 0 0 1 382 345" fill="none" stroke="var(--fg-muted)" stroke-width="1.4" marker-end="url(#arrow)"></path>
+        <path d="M 318 398 A 165 165 0 0 1 162 398" fill="none" stroke="var(--fg-muted)" stroke-width="1.4" marker-end="url(#arrow)"></path>
+        <path d="M 98 345 A 165 165 0 0 1 58 232" fill="none" stroke="var(--fg-muted)" stroke-width="1.4" marker-end="url(#arrow)"></path>
+        <path d="M 76 160 A 165 165 0 0 1 202 65" fill="none" stroke="var(--fg-muted)" stroke-width="1.4" marker-end="url(#arrow)"></path>
+      </svg>
+    </div>
+  </section>
+
+  <section id="players">
+    <div class="section-head"><h2>Czy są inni gracze globalnie</h2></div>
+    <p class="flywheel-note" style="margin-bottom:16px">Nikt z poniższych nie jest czystą „porównywarką cen" — wszyscy budują wokół automatyzacji dokumentów, predykcji cen albo zakupu jako usługi.</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Firma</th><th>Siedziba</th><th>Finansowanie</th><th>Mechanizm</th><th>Źródło</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><b>BRKZ</b></td>
+            <td>Rijad, Arabia Saudyjska</td>
+            <td class="mono">$31M Series B (2026)<br><span class="muted">+ $22,5M wcześniej</span></td>
+            <td>Predykcja cen z 40k RFQ + WhatsApp/web intake + wbudowane finansowanie</td>
+            <td><a href="https://thenextweb.com/news/brkz-31m-series-b-saudi-building-materials-ai-pricing" target="_blank" rel="noopener">TheNextWeb</a></td>
+          </tr>
+          <tr>
+            <td><b>Field Materials</b></td>
+            <td>USA</td>
+            <td class="mono">~$19M łącznie<br><span class="muted">(w tym $4,65M seed)</span></td>
+            <td>LLM czyta oferty, dowody dostawy i faktury, wpisuje do 9 systemów księgowych budowlanych</td>
+            <td><a href="https://builtworlds.com/companies/field-materials/" target="_blank" rel="noopener">BuiltWorlds</a></td>
+          </tr>
+          <tr>
+            <td><b>DigiBuild</b></td>
+            <td>USA (Y Combinator)</td>
+            <td class="mono muted">nieujawnione</td>
+            <td>Agent LLM kupujący i zarządzający materiałami dla dużych wykonawców</td>
+            <td><a href="https://ycombinator.com/companies/digibuild" target="_blank" rel="noopener">Y Combinator</a></td>
+          </tr>
+          <tr>
+            <td><b>Buildstock</b></td>
+            <td>USA</td>
+            <td class="mono">$1,6M pre-seed</td>
+            <td>Marketplace B2B + fintech dla budownictwa wysokościowego</td>
+            <td><a href="https://pulse2.com/buildstock/" target="_blank" rel="noopener">Pulse2</a></td>
+          </tr>
+          <tr>
+            <td><b>Parspec</b></td>
+            <td>USA</td>
+            <td class="mono">$20M Series A</td>
+            <td>AI do specyfikacji i zamówień produktów MEP (mechanika/elektryka/hydraulika)</td>
+            <td><a href="https://www.traxtech.com/ai-in-supply-chain/ai-construction-procurement-startup-parspec-raises-20m-series-a" target="_blank" rel="noopener">TraxTech</a></td>
+          </tr>
+          <tr>
+            <td><b>Prolo</b></td>
+            <td>Wielka Brytania</td>
+            <td class="mono">£4,2M seed</td>
+            <td>„Procurement as a service" — zarządzany zakup materiałów</td>
+            <td><a href="https://procurementmag.com/news/how-prolo-uses-ai-to-modernise-construction-purchasing" target="_blank" rel="noopener">Procurement Mag</a></td>
+          </tr>
+          <tr>
+            <td><b>MatBook</b></td>
+            <td>USA</td>
+            <td class="mono">$750k pre-seed</td>
+            <td>Zarządzanie zmiennością cen materiałów budowlanych</td>
+            <td><a href="https://builtworlds.com/news/formwork-labs-alum-secures-750k-pre-seed-round-transform-material-procurement/" target="_blank" rel="noopener">BuiltWorlds</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p><b>Źródła:</b> funding i mechanizm BRKZ — <a href="https://thenextweb.com/news/brkz-31m-series-b-saudi-building-materials-ai-pricing" target="_blank" rel="noopener">TheNextWeb</a>, <a href="https://www.wamda.com/en/2026/09/brkz-secures-31-million-scale-ai-powered-construction-procurement" target="_blank" rel="noopener">Wamda</a>. Pozostali gracze — linki w tabeli powyżej. Liczby finansowania dla Field Materials i Prolo pochodzą z pojedynczych źródeł prasowych i mogą być niepełne; traktuj je jako orientacyjne.</p>
+    <p>Symulator po lewej jest ilustracją mechanizmu opisywanego w prasie (predykcja cen, intake przez WhatsApp/web, finansowanie wbudowane, potwierdzanie dostaw przez odczyt wiadomości) — nie jest to podgląd realnego oprogramowania BRKZ ani realne dane cenowe.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var suppliers = [
+    { name: "Betmix Wrocław",      price: 557, days: 3, fit: "wysokie" },
+    { name: "Śląska Grupa Bud.",   price: 577, days: 2, fit: "bardzo wysokie" },
+    { name: "Krakowski Beton",     price: 601, days: 4, fit: "średnie" }
+  ];
+
+  function fmtPLN(v){ return v.toLocaleString('pl-PL') + ' zł'; }
+
+  function buildSteps(){
+    return [
+      {
+        title: "RFQ trafia do systemu",
+        tag: { text: "WhatsApp / web", cls: "tag-live" },
+        render: function(el){
+          el.innerHTML = '<div class="step-detail">Kupujący opisuje potrzebę jednym zdaniem — bez formularza z dziesiątkami pól. Zgłoszenie dostaje numer <span class="mono">RFQ-48217</span>.</div>';
+        }
+      },
+      {
+        title: "Silnik predykcji cen szacuje widełki",
+        tag: { text: "predykcja, nie zapytanie", cls: "tag-predicted" },
+        render: function(el){
+          el.innerHTML =
+            '<div class="step-detail">Model wytrenowany na dziesiątkach tysięcy wcześniejszych RFQ (BRKZ: ok. 40 000) szacuje cenę w ułamku sekundy — zanim jakikolwiek dostawca odpowie.</div>' +
+            '<div class="quote-list"><div class="quote"><span class="name">Przewidywana cena</span><span class="meta mono">580–610 zł / m³</span></div></div>' +
+            '<span class="tag tag-predicted">trafność 84–89% w ±5%</span>';
+        }
+      },
+      {
+        title: "Dopasowanie dostawców z sieci",
+        tag: null,
+        render: function(el){
+          el.innerHTML = '<div class="step-detail">Z sieci dostawców (BRKZ: ok. 2100, lokalni + międzynarodowi) system wybiera tych pasujących do kategorii, regionu i terminu — i wysyła zapytanie tylko do nich.</div>';
+        }
+      },
+      {
+        title: "Oferty spływają",
+        tag: { text: "na żywo", cls: "tag-live" },
+        render: function(el){
+          var html = '<div class="step-detail">Realne oferty docierają w ciągu minut, nie dni:</div><div class="quote-list" id="quote-list"></div>';
+          el.innerHTML = html;
+          var list = el.querySelector('#quote-list');
+          suppliers.forEach(function(s, i){
+            setTimeout(function(){
+              var row = document.createElement('div');
+              row.className = 'quote' + (i === 1 ? ' best' : '');
+              row.innerHTML = '<span class="name">' + s.name + '</span><span class="meta">' + fmtPLN(s.price) + ' / m³ · ' + s.days + ' dni</span>';
+              list.appendChild(row);
+            }, i * 420);
+          });
+        },
+        extraDelay: suppliers.length * 420
+      },
+      {
+        title: "Rekomendacja AI, decyzja człowieka",
+        tag: null,
+        render: function(el){
+          el.innerHTML = '<div class="step-detail">System poleca Śląską Grupę Budowlaną — nie najtańszą, ale najlepszy bilans ceny i czasu dostawy. Zespół zakupowy zatwierdza albo wybiera inną ofertę ręcznie.</div>';
+        }
+      },
+      {
+        title: "Zamówienie i finansowanie wbudowane",
+        tag: { text: "opcjonalne", cls: "tag-predicted" },
+        render: function(el){
+          el.innerHTML = '<div class="step-detail">Zamówienie złożone. Kupujący może odroczyć płatność o 30 dni za prowizję — to część modelu BRKZ: platforma sama udziela kredytu swoim klientom.</div>';
+        }
+      },
+      {
+        title: "Potwierdzenie dostawy",
+        tag: { text: "WhatsApp", cls: "tag-live" },
+        render: function(el){
+          el.innerHTML =
+            '<div class="step-detail">Agent czyta wiadomość z dowodem dostawy i dopasowuje ją do zamówienia — nie dzwoni do nikogo.</div>' +
+            '<div class="whatsapp"><div class="bubble">📷 WZ-2024/11847 — 120 m³ betonu, odebrane.</div><div class="bubble mono">✓ dopasowano do RFQ-48217</div></div>';
+        }
+      },
+      {
+        title: "Transakcja wraca do modelu",
+        tag: { text: "pętla się zamyka", cls: "tag-predicted" },
+        render: function(el){
+          el.innerHTML = '<div class="step-detail">Nowy punkt danych trafia do zbioru treningowego. Dokładność predykcji w tej kategorii i regionie: <span class="mono">84% → 86%</span>. Następne RFQ będzie szybsze.</div>';
+        }
+      }
+    ];
+  }
+
+  var stepsEl = document.getElementById('steps');
+  var statusEl = document.getElementById('status-line');
+  var runBtn = document.getElementById('run-btn');
+  var resetBtn = document.getElementById('reset-btn');
+  var running = false;
+
+  function reset(){
+    stepsEl.innerHTML = '';
+    statusEl.textContent = '';
+    running = false;
+    runBtn.disabled = false;
+  }
+
+  function run(){
+    if (running) return;
+    reset();
+    running = true;
+    runBtn.disabled = true;
+    var steps = buildSteps();
+    var delay = 0;
+    var STEP_GAP = 650;
+
+    steps.forEach(function(step, i){
+      setTimeout(function(){
+        var card = document.createElement('div');
+        card.className = 'step';
+        var body = document.createElement('div');
+        body.className = 'step-body';
+        var titleEl = document.createElement('div');
+        titleEl.className = 'step-title';
+        titleEl.textContent = step.title;
+        body.appendChild(titleEl);
+        var content = document.createElement('div');
+        body.appendChild(content);
+        if (step.tag){
+          var tagEl = document.createElement('span');
+          tagEl.className = 'tag ' + step.tag.cls;
+          tagEl.textContent = step.tag.text;
+        }
+        card.innerHTML = '<div class="step-num">' + (i + 1) + '</div>';
+        card.appendChild(body);
+        stepsEl.appendChild(card);
+        step.render(content);
+        if (step.tag){
+          var tag2 = document.createElement('span');
+          tag2.className = 'tag ' + step.tag.cls;
+          tag2.textContent = step.tag.text;
+          content.appendChild(tag2);
+        }
+        requestAnimationFrame(function(){ card.classList.add('show'); });
+        statusEl.textContent = 'krok ' + (i + 1) + ' / ' + steps.length;
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+        if (i === steps.length - 1){
+          setTimeout(function(){
+            statusEl.textContent = 'symulacja zakończona · ' + steps.length + '/' + steps.length;
+            running = false;
+            runBtn.disabled = false;
+          }, step.extraDelay || 0);
+        }
+      }, delay);
+      delay += STEP_GAP + (step.extraDelay || 0);
+    });
+  }
+
+  runBtn.addEventListener('click', run);
+  resetBtn.addEventListener('click', reset);
+})();
+</script>
